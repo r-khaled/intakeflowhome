@@ -3,7 +3,7 @@ import { z } from "zod";
 export const GAS_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbzslntsY3F7xtLfbBGAPTjihU9uwELI89P0yAz4kHFGxusq106EvPD9mmsD0QNWxR14Ig/exec";
 
-export const SALES_EMAIL = "sales@intakeflow.qzz.io";
+export const SALES_EMAIL = "sales.mail@intakeflow.qzz.io";
 
 export const phoneRegex = /^[+\d][\d\s\-()]{6,20}$/;
 
