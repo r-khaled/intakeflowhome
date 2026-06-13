@@ -1,6 +1,4 @@
-import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { CheckCircle2, Loader2, Mail, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,36 +11,45 @@ export function LeadForm() {
   const { t } = useI18n();
   const schema = useMemo(() => makeLeadSchema(t.form.errors), [t]);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<LeadFormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      businessName: "",
-      industry: "",
-      email: "",
-      phone: "",
-      teamSize: undefined as unknown as "1-5",
-      outcomes: "",
-      honeypot: "",
-    },
+  const [values, setValues] = useState<LeadFormValues>({
+    businessName: "",
+    industry: "",
+    email: "",
+    phone: "",
+    teamSize: undefined as LeadFormValues["teamSize"],
+    outcomes: "",
+    honeypot: "",
   });
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof LeadFormValues, string>>>({});
 
-  const onSubmit = async (data: LeadFormValues) => {
-    if (data.honeypot && data.honeypot.length > 0) {
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const result = schema.safeParse(values);
+
+    if (!result.success) {
+      const nextErrors: Partial<Record<keyof LeadFormValues, string>> = {};
+      for (const key in result.error.formErrors.fieldErrors) {
+        const fieldError = result.error.formErrors.fieldErrors[key];
+        if (fieldError && fieldError.length > 0) {
+          nextErrors[key as keyof LeadFormValues] = String(fieldError[0]);
+        }
+      }
+      setFormErrors(nextErrors);
+      return;
+    }
+
+    if (values.honeypot && values.honeypot.length > 0) {
       setStatus("success");
       reset();
       return;
     }
+
+    setFormErrors({});
     setStatus("submitting");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      await submitLead(data, controller.signal);
+      await submitLead(values, controller.signal);
       setStatus("success");
       reset();
     } catch {
@@ -50,6 +57,13 @@ export function LeadForm() {
     } finally {
       clearTimeout(timeout);
     }
+  };
+
+  const handleChange = (field: keyof LeadFormValues) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setValues((current) => ({
+      ...current,
+      [field]: event.target.value,
+    }));
   };
 
   const errClass = "text-xs font-medium text-destructive mt-1";
@@ -78,60 +92,102 @@ export function LeadForm() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5" noValidate>
+          <form onSubmit={onSubmit} className="grid gap-5" noValidate>
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <Label htmlFor="businessName">{t.form.labels.businessName}</Label>
-                <Input id="businessName" placeholder={t.form.placeholders.businessName} {...register("businessName")} className="mt-1.5" />
-                {errors.businessName && <p className={errClass}>{errors.businessName.message}</p>}
+                <Input
+                  id="businessName"
+                  placeholder={t.form.placeholders.businessName}
+                  value={values.businessName}
+                  onChange={handleChange("businessName")}
+                  className="mt-1.5"
+                />
+                {formErrors.businessName && <p className={errClass}>{formErrors.businessName}</p>}
               </div>
               <div>
                 <Label htmlFor="email">{t.form.labels.email}</Label>
-                <Input id="email" type="email" placeholder={t.form.placeholders.email} {...register("email")} className="mt-1.5" />
-                {errors.email && <p className={errClass}>{errors.email.message}</p>}
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder={t.form.placeholders.email}
+                  value={values.email}
+                  onChange={handleChange("email")}
+                  className="mt-1.5"
+                />
+                {formErrors.email && <p className={errClass}>{formErrors.email}</p>}
               </div>
             </div>
 
             <div>
               <Label htmlFor="industry">{t.form.labels.industry}</Label>
-              <Textarea id="industry" rows={3} placeholder={t.form.placeholders.industry} {...register("industry")} className="mt-1.5" />
-              {errors.industry && <p className={errClass}>{errors.industry.message}</p>}
+              <Textarea
+                id="industry"
+                rows={3}
+                placeholder={t.form.placeholders.industry}
+                value={values.industry}
+                onChange={handleChange("industry")}
+                className="mt-1.5"
+              />
+              {formErrors.industry && <p className={errClass}>{formErrors.industry}</p>}
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <Label htmlFor="phone">{t.form.labels.phone}</Label>
-                <Input id="phone" type="tel" placeholder={t.form.placeholders.phone} {...register("phone")} className="mt-1.5" />
-                {errors.phone && <p className={errClass}>{errors.phone.message}</p>}
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder={t.form.placeholders.phone}
+                  value={values.phone}
+                  onChange={handleChange("phone")}
+                  className="mt-1.5"
+                />
+                {formErrors.phone && <p className={errClass}>{formErrors.phone}</p>}
               </div>
               <div>
                 <Label htmlFor="teamSize">{t.form.labels.teamSize}</Label>
                 <select
                   id="teamSize"
-                  {...register("teamSize")}
-                  defaultValue=""
+                  value={values.teamSize ?? ""}
+                  onChange={handleChange("teamSize")}
                   className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  <option value="" disabled>{t.form.placeholders.teamSizeSelect}</option>
+                  <option value="" disabled>
+                    {t.form.placeholders.teamSizeSelect}
+                  </option>
                   <option value="1-5">{t.form.teamSizes.s1}</option>
                   <option value="6-20">{t.form.teamSizes.s2}</option>
                   <option value="20+">{t.form.teamSizes.s3}</option>
                 </select>
-                {errors.teamSize && <p className={errClass}>{errors.teamSize.message}</p>}
+                {formErrors.teamSize && <p className={errClass}>{formErrors.teamSize}</p>}
               </div>
             </div>
 
             <div>
               <Label htmlFor="outcomes">{t.form.labels.outcomes}</Label>
-              <Textarea id="outcomes" rows={3} placeholder={t.form.placeholders.outcomes} {...register("outcomes")} className="mt-1.5" />
-              {errors.outcomes && <p className={errClass}>{errors.outcomes.message}</p>}
+              <Textarea
+                id="outcomes"
+                rows={3}
+                placeholder={t.form.placeholders.outcomes}
+                value={values.outcomes}
+                onChange={handleChange("outcomes")}
+                className="mt-1.5"
+              />
+              {formErrors.outcomes && <p className={errClass}>{formErrors.outcomes}</p>}
             </div>
 
             {/* Honeypot — visually hidden, off-screen, not focusable */}
             <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: 1, height: 1, overflow: "hidden", opacity: 0 }}>
               <label>
                 Do not fill
-                <input type="text" tabIndex={-1} autoComplete="off" {...register("honeypot")} />
+                <input
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={values.honeypot}
+                  onChange={handleChange("honeypot")}
+                />
               </label>
             </div>
 
